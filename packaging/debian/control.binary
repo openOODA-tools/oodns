@@ -1,0 +1,10 @@
+Package: oodns
+Version: 0.2.0-1
+Section: utils
+Priority: optional
+Architecture: amd64
+Maintainer: openOODA-tools <ops@openooda.org>
+Depends: libc6
+Description: Sovereign DNS Resolver & Query Engine
+ Asynchronous DNS resolver supporting DNS-over-HTTPS and capability allowlists
+ in pure native openOODA with zero ambient authority and streaming MCP.

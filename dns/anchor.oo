@@ -1,0 +1,52 @@
+// # DNS Subsystem Verification Anchor
+//
+// Logline: Substrate verification anchor for DNS types, allowlist, resolver, and DoH engine.
+//
+// Setup: Executes deterministic unit test assertions against dns/ modules.
+//
+// Beats:
+//   1. Verify record type normalization and rcode naming.
+//   2. Verify domain allowlist pattern matching and prefix/suffix bounds.
+//   3. Verify DoH endpoint construction and query resolution.
+
+import "dns/dns_types.oo";
+import "dns/dns_allowlist.oo";
+import "dns/dns_doh.oo";
+import "dns/dns_resolver.oo";
+
+pub fn run_dns_tests() -> Bool {
+    // Test 1: Record types
+    if normalize_rtype("a") != "A" { return false; }
+    if normalize_rtype("aaaa") != "AAAA" { return false; }
+    if normalize_rtype("mx") != "MX" { return false; }
+    if !is_valid_rtype("TXT") { return false; }
+    if !is_valid_rtype("cname") { return false; }
+    if rcode_name(0) != "NOERROR" { return false; }
+    if rcode_name(3) != "NXDOMAIN" { return false; }
+
+    // Test 2: Allowlist matching
+    if !has_prefix("openooda.org", "open") { return false; }
+    if !has_suffix("openooda.org", ".org") { return false; }
+    if sanitize_domain("OPENOODA.ORG.") != "openooda.org" { return false; }
+    if !domain_matches_pattern("tools.openooda.org", "*.openooda.org") { return false; }
+    if domain_matches_pattern("attacker.com", "*.openooda.org") { return false; }
+    if !check_domain_allowed("openooda.org", "github.com,openooda.org") { return false; }
+    if check_domain_allowed("evil.com", "openooda.org,github.com") { return false; }
+
+    // Test 3: DoH construction
+    let doh_url: String = build_doh_url("cloudflare", "openooda.org", "A");
+    if !has_prefix(doh_url, "https://cloudflare-dns.com/dns-query") { return false; }
+
+    // Test 4: Reverse pointer and resolver
+    let arpa: String = reverse_ip_to_arpa("1.1.1.1");
+    if arpa != "1.1.1.1.in-addr.arpa" { return false; }
+
+    let mut q: DnsQuery = default_dns_query();
+    q.domain = "openooda.org";
+    q.qtype = "A";
+    let resp: DnsResponse = resolve_query(q);
+    if resp.rcode != "NOERROR" { return false; }
+    if list_len(resp.answers) < 1 { return false; }
+
+    return true;
+}

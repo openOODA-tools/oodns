@@ -1,0 +1,103 @@
+// # DNS Command-Line Options Parser
+//
+// Logline: Parses command-line arguments into structured DNS resolution options.
+//
+// Setup: Strictly checks flags, operands, server overrides, and DoH directives.
+//
+// Beats:
+//   1. Initialize default DNS options with system nameserver fallback.
+//   2. Iterate argument list extracting flags, values, and operands.
+//   3. Handle reverse pointer shorthand (-x) and server directives (@nameserver).
+
+import "dns/dns_types.oo";
+import "dns/dns_resolver.oo";
+
+fn parse_int_from_str(s: String) -> Int {
+    let mut res: Int = 0;
+    let mut i: Int = 0;
+    let s_len: Int = chars_len(s);
+    while i < s_len {
+        let b: Int = byte_at(s, i);
+        if b >= 48 && b <= 57 {
+            res = res * 10 + (b - 48);
+        }
+        i = i + 1;
+    }
+    return res;
+}
+
+pub fn parse_cli_options(args: List[String]) -> DnsOpts {
+    let mut opts: DnsOpts = default_dns_opts();
+    opts.server = detect_system_nameserver();
+
+    let num_args: Int = list_len(args);
+    let mut i: Int = 0;
+
+    while i < num_args {
+        let arg: String = list_get(args, i);
+
+        if arg == "-h" || arg == "--help" {
+            opts.show_help = true;
+            return opts;
+        } else if arg == "-v" || arg == "--version" {
+            opts.show_version = true;
+            return opts;
+        } else if arg == "--mcp" {
+            opts.run_mcp = true;
+            return opts;
+        } else if arg == "-j" || arg == "--json" {
+            opts.show_json = true;
+        } else if arg == "-D" || arg == "--demo" {
+            opts.show_demo = true;
+        } else if arg == "+short" {
+            opts.show_short = true;
+        } else if arg == "+tcp" {
+            opts.use_tcp = true;
+        } else if arg == "-x" || arg == "--reverse" {
+            if i + 1 < num_args {
+                i = i + 1;
+                let target_ip: String = list_get(args, i);
+                opts.domain = reverse_ip_to_arpa(target_ip);
+                opts.qtype = "PTR";
+            }
+        } else if arg == "-s" || arg == "--server" {
+            if i + 1 < num_args {
+                i = i + 1;
+                opts.server = list_get(args, i);
+            }
+        } else if arg == "-t" || arg == "--type" {
+            if i + 1 < num_args {
+                i = i + 1;
+                opts.qtype = normalize_rtype(list_get(args, i));
+            }
+        } else if arg == "-p" || arg == "--port" {
+            if i + 1 < num_args {
+                i = i + 1;
+                opts.port = parse_int_from_str(list_get(args, i));
+            }
+        } else if arg == "--doh" {
+            opts.use_doh = true;
+            if i + 1 < num_args && str_slice(list_get(args, i + 1), 0, 1) != "-" {
+                i = i + 1;
+                opts.doh_url = list_get(args, i);
+            }
+        } else if arg == "--allowlist" {
+            if i + 1 < num_args {
+                i = i + 1;
+                opts.allowlist = list_get(args, i);
+            }
+        } else if str_slice(arg, 0, 1) == "@" {
+            opts.server = str_slice(arg, 1, chars_len(arg));
+        } else if str_slice(arg, 0, 1) != "-" && str_slice(arg, 0, 1) != "+" {
+            if chars_len(opts.domain) == 0 {
+                opts.domain = arg;
+            } else if is_valid_rtype(arg) {
+                opts.qtype = normalize_rtype(arg);
+            }
+        }
+
+        i = i + 1;
+    }
+
+    return opts;
+}

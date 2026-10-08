@@ -1,0 +1,47 @@
+// # DNS Render Subsystem Verification Anchor
+//
+// Logline: Substrate verification anchor for DNS table, JSON, and synthetic renderers.
+//
+// Setup: Executes deterministic unit test assertions against render/ modules.
+//
+// Beats:
+//   1. Verify table and short output formatting.
+//   2. Verify JSON Lines serialization and string escaping.
+//   3. Verify synthetic showcase output generation.
+
+import "dns/dns_types.oo";
+import "dns/dns_resolver.oo";
+import "render/render_table.oo";
+import "render/render_json.oo";
+import "render/synthetic_records.oo";
+
+pub fn run_render_tests() -> Bool {
+    let mut q: DnsQuery = default_dns_query();
+    q.domain = "openooda.org";
+    q.qtype = "A";
+    let resp: DnsResponse = resolve_query(q);
+
+    // Test 1: Table and short rendering
+    let table: String = render_table_output(resp);
+    if chars_len(table) == 0 { return false; }
+
+    let short: String = render_short_output(resp);
+    if chars_len(short) == 0 { return false; }
+
+    // Test 2: JSON serialization
+    let json_line: String = render_response_json(resp);
+    if chars_len(json_line) == 0 { return false; }
+
+    // Test 3: String escape
+    let esc: String = json_escape("foo\"bar\nbaz");
+    if chars_len(esc) == 0 { return false; }
+
+    // Test 4: Synthetic showcase
+    let demo_text: String = run_synthetic_showcase(false);
+    if chars_len(demo_text) == 0 { return false; }
+
+    let demo_json: String = run_synthetic_showcase(true);
+    if chars_len(demo_json) == 0 { return false; }
+
+    return true;
+}

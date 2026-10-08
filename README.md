@@ -54,17 +54,28 @@ oodns-uninstall
 ## 2. CLI Usage
 
 ```
-usage: oodns [options] [ARGUMENTS]...
+usage: oodns [options] <domain> [TYPE]
 
-Asynchronous DNS resolver supporting DNS-over-HTTPS and capability allowlists.
+Sovereign DNS resolver supporting DNS-over-HTTPS and capability allowlists.
 
 Options:
+  <domain>             domain name to resolve (e.g. openooda.org)
+  [TYPE]               record type: A, AAAA, MX, TXT, CNAME, NS, PTR, SOA, SRV [default: A]
+  @<server>            nameserver to query (e.g. @1.1.1.1, @8.8.8.8, @127.0.0.53)
+  -s, --server <ip>    override target nameserver IP address
+  -p, --port <port>    override query destination port [default: 53]
+  -t, --type <type>    explicit record type selector
+  -x, --reverse <ip>   reverse DNS lookup for IPv4 or IPv6 address
+      --doh [url]      query via RFC 8484 DNS-over-HTTPS endpoint
+      --allowlist <csv> restrict resolution targets to allowed domain patterns
+      +short           terse answer output mode (rdata values only)
+      +tcp             force transmission over TCP
+  -j, --json           output formatted as structured JSON Lines
+  -D, --demo           synthetic DNS resolution showcase across record types
+      --mcp            run as Model Context Protocol stdio server
+      --test           run internal verification anchor suite
   -h, --help           display this help and exit
   -v, --version        output version information and exit
-      --json           output formatted as JSON Lines
-      --color <WHEN>   colorize output: auto, always, never [default: auto]
-      --theme <NAME>   override active oote palette
-      --mcp            run as Model Context Protocol stdio server
 ```
 
 ---
@@ -79,11 +90,14 @@ Options:
 
 ## 4. Model Context Protocol (MCP)
 
-When invoked with `--mcp`, `oodns` runs a JSON-RPC 2.0 stdio server providing structured tools for AI coding agents:
+When invoked with `--mcp`, `oodns` runs a JSON-RPC 2.0 stdio server providing 6 sovereign tools for AI coding agents:
 
-```bash
-oodns --mcp
-```
+* `dns_resolve`: Resolve domain names to record types (`domain`, `record_type`, `server`, `timeout_ms`).
+* `dns_lookup`: Quick IP resolution (A/AAAA) for domain.
+* `dns_reverse`: Reverse DNS pointer lookup (`ip`).
+* `dns_doh`: Query via RFC 8484 DNS-over-HTTPS endpoint (`domain`, `record_type`, `endpoint`).
+* `dns_validate`: Validate domain against capability allowlist rules (`domain`, `allowlist`).
+* `dns_demo`: Run full synthetic DNS resolution showcase across record types.
 
 ---
 

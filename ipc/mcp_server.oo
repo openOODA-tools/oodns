@@ -1,0 +1,191 @@
+// # Streaming MCP Server for DNS Resolution
+//
+// Logline: JSON-RPC 2.0 stdio server providing sovereign DNS query, DoH, and allowlist inspection tools.
+//
+// Setup: Bridges standard input/output streaming protocol to DNS resolver and synthetic showcases.
+//
+// Beats:
+//   1. Handle MCP initialize handshake with server metadata and capability declarations.
+//   2. Expose tools/list catalogue with six sovereign DNS diagnostic tools.
+//   3. Dispatch tools/call for resolve, lookup, reverse, doh, validate, and demo.
+//   4. Deliver streaming JSON-RPC responses over standard output.
+
+import "dns/dns_types.oo";
+import "dns/dns_allowlist.oo";
+import "dns/dns_doh.oo";
+import "dns/dns_resolver.oo";
+import "render/render_table.oo";
+import "render/render_json.oo";
+import "render/synthetic_records.oo";
+import "ipc/json_field.oo";
+
+fn build_error(id: String, code: Int, msg: String) -> String {
+    return "{\"jsonrpc\":\"2.0\",\"id\":" + id + ",\"error\":{\"code\":"
+        + code.to_string() + ",\"message\":\"" + json_escape(msg) + "\"}}\n";
+}
+
+fn build_tool_result(id: String, text: String) -> String {
+    return "{\"jsonrpc\":\"2.0\",\"id\":" + id + ",\"result\":{\"content\":[{\"type\":\"text\",\"text\":\""
+        + json_escape(text) + "\"}]}}\n";
+}
+
+pub fn render_mcp_init(id: String) -> String {
+    return "{\"jsonrpc\":\"2.0\",\"id\":" + id
+        + ",\"result\":{\"protocolVersion\":\"2024-11-05\",\"capabilities\":{\"tools\":{}},\"serverInfo\":{\"name\":\"oodns\",\"version\":\"0.2.0\"}}}\n";
+}
+
+pub fn render_mcp_tools_list(id: String) -> String {
+    let mut out: String = "{\"jsonrpc\":\"2.0\",\"id\":" + id + ",\"result\":{\"tools\":[";
+    out = out + "{\"name\":\"dns_resolve\",\"description\":\"Resolve domain name to specified record type with server target.\",\"inputSchema\":{\"type\":\"object\",\"properties\":{\"domain\":{\"type\":\"string\"},\"record_type\":{\"type\":\"string\"},\"server\":{\"type\":\"string\"}},\"required\":[\"domain\"]}}";
+    out = out + ",{\"name\":\"dns_lookup\",\"description\":\"Quick IP address resolution (A and AAAA) for target host.\",\"inputSchema\":{\"type\":\"object\",\"properties\":{\"domain\":{\"type\":\"string\"}},\"required\":[\"domain\"]}}";
+    out = out + ",{\"name\":\"dns_reverse\",\"description\":\"Reverse DNS pointer lookup for target IPv4 or IPv6 address.\",\"inputSchema\":{\"type\":\"object\",\"properties\":{\"ip\":{\"type\":\"string\"}},\"required\":[\"ip\"]}}";
+    out = out + ",{\"name\":\"dns_doh\",\"description\":\"Query DNS records via RFC 8484 DNS-over-HTTPS endpoint.\",\"inputSchema\":{\"type\":\"object\",\"properties\":{\"domain\":{\"type\":\"string\"},\"record_type\":{\"type\":\"string\"},\"endpoint\":{\"type\":\"string\"}},\"required\":[\"domain\"]}}";
+    out = out + ",{\"name\":\"dns_validate\",\"description\":\"Validate whether a domain is authorized by capability allowlist rules.\",\"inputSchema\":{\"type\":\"object\",\"properties\":{\"domain\":{\"type\":\"string\"},\"allowlist\":{\"type\":\"string\"}},\"required\":[\"domain\",\"allowlist\"]}}";
+    out = out + ",{\"name\":\"dns_demo\",\"description\":\"Run multi-record synthetic DNS resolution showcase across record types.\",\"inputSchema\":{\"type\":\"object\",\"properties\":{\"json_mode\":{\"type\":\"boolean\"}}}}";
+    out = out + "]}}\n";
+    return out;
+}
+
+pub fn handle_mcp_call(id: String, tool_name: String, req: String) -> String {
+    if tool_name == "dns_demo" {
+        let json_mode: Bool = json_extract_bool_field(req, "json_mode", false);
+        return build_tool_result(id, run_synthetic_showcase(json_mode));
+    }
+
+    if tool_name == "dns_resolve" {
+        let mut q: DnsQuery = default_dns_query();
+        q.domain = json_extract_str_field(req, "domain");
+        let rtype: String = json_extract_str_field(req, "record_type");
+        if chars_len(rtype) > 0 { q.qtype = normalize_rtype(rtype); }
+        let srv: String = json_extract_str_field(req, "server");
+        if chars_len(srv) > 0 { q.server = srv; }
+        let resp: DnsResponse = resolve_query(q);
+        return build_tool_result(id, render_table_output(resp));
+    }
+
+    if tool_name == "dns_lookup" {
+        let mut q: DnsQuery = default_dns_query();
+        q.domain = json_extract_str_field(req, "domain");
+        q.qtype = "A";
+        let resp: DnsResponse = resolve_query(q);
+        let mut out: String = "IP addresses for " + q.domain + ":\n";
+        let n: Int = list_len(resp.answers);
+        let mut i: Int = 0;
+        while i < n {
+            let rec: DnsRecord = list_get(resp.answers, i);
+            out = out + "  ip: " + rec.rdata + " (type: " + rec.rtype + ", ttl: " + rec.ttl.to_string() + "s)\n";
+            i = i + 1;
+        }
+        return build_tool_result(id, out);
+    }
+
+    if tool_name == "dns_reverse" {
+        let target_ip: String = json_extract_str_field(req, "ip");
+        let mut q: DnsQuery = default_dns_query();
+        q.domain = reverse_ip_to_arpa(target_ip);
+        q.qtype = "PTR";
+        let resp: DnsResponse = resolve_query(q);
+        return build_tool_result(id, render_table_output(resp));
+    }
+
+    if tool_name == "dns_doh" {
+        let mut q: DnsQuery = default_dns_query();
+        q.domain = json_extract_str_field(req, "domain");
+        let rtype: String = json_extract_str_field(req, "record_type");
+        if chars_len(rtype) > 0 { q.qtype = normalize_rtype(rtype); }
+        let ep: String = json_extract_str_field(req, "endpoint");
+        q.use_doh = true;
+        q.doh_url = if chars_len(ep) > 0 { ep } else { default_doh_endpoint() };
+        let resp: DnsResponse = resolve_query(q);
+        let out: String = "DoH Endpoint: " + q.doh_url + "\n" + render_table_output(resp);
+        return build_tool_result(id, out);
+    }
+
+    if tool_name == "dns_validate" {
+        let dom: String = json_extract_str_field(req, "domain");
+        let al: String = json_extract_str_field(req, "allowlist");
+        let allowed: Bool = check_domain_allowed(dom, al);
+        let out: String = if allowed {
+            "Domain '" + dom + "' is allowed by policy rule: " + al
+        } else {
+            "Domain '" + dom + "' is REJECTED by policy rule: " + al
+        };
+        return build_tool_result(id, out);
+    }
+
+    return build_error(id, -32601, "Method or tool not found: " + tool_name);
+}
+
+pub fn handle_mcp_message(req: String) -> String {
+    let id_str: String = json_extract_str_field(req, "id");
+    let id_int: Int = json_extract_int_field(req, "id", -1);
+    let id: String = if chars_len(id_str) > 0 {
+        "\"" + id_str + "\""
+    } else if id_int >= 0 {
+        id_int.to_string()
+    } else {
+        "1"
+    };
+    let method: String = json_extract_str_field(req, "method");
+
+    if method == "initialize" {
+        return render_mcp_init(id);
+    }
+    if method == "notifications/initialized" {
+        return "";
+    }
+    if method == "tools/list" {
+        return render_mcp_tools_list(id);
+    }
+    if method == "tools/call" {
+        let tool_name: String = json_extract_str_field(req, "name");
+        return handle_mcp_call(id, tool_name, req);
+    }
+    if method == "shutdown" {
+        return "{\"jsonrpc\":\"2.0\",\"id\":" + id + ",\"result\":null}\n";
+    }
+    return build_error(id, -32601, "Method not found: " + method);
+}
+
+fn find_newline_pos(s: String) -> Int {
+    let n: Int = chars_len(s);
+    let mut i: Int = 0;
+    while i < n {
+        if byte_at(s, i) == 10 {
+            return i;
+        }
+        i = i + 1;
+    }
+    return -1;
+}
+
+pub fn run_mcp_server(fr: &FsReadCap) {
+    let mut buf: String = "";
+    let mut running: Bool = true;
+    while running {
+        let r: Result[String, String] = oo_read_stdin_chunk(fr, 4096);
+        if !r.is_ok() {
+            running = false;
+        } else {
+            let chunk: String = match r { Ok(s) => s, Err(_) => "" };
+            if chars_len(chunk) == 0 {
+                running = false;
+            } else {
+                buf = buf + chunk;
+                let mut nl_pos: Int = find_newline_pos(buf);
+                while nl_pos >= 0 {
+                    let line: String = str_slice(buf, 0, nl_pos);
+                    buf = str_slice(buf, nl_pos + 1, chars_len(buf));
+                    let trimmed: String = str_trim(line);
+                    if chars_len(trimmed) > 0 {
+                        let resp: String = handle_mcp_message(trimmed);
+                        if chars_len(resp) > 0 {
+                            print(resp);
+                        }
+                    }
+                    nl_pos = find_newline_pos(buf);
+                }
+            }
+        }
+    }
+}

@@ -1,13 +1,28 @@
-// # oodns Root Anchor
+// # Aggregate Root Substrate Anchor
 //
-// Logline: Top-level anchor re-exporting options, core logic, render, and ipc subsystems.
+// Logline: Unified test runner aggregating verification anchors from dns, render, and ipc subsystems.
 //
-// Setup: Pure shim re-exporting all oodns subsystem anchors.
+// Setup: Demands zero ambient authority, links all functional module anchors together.
 //
 // Beats:
-//   1. Re-export options parsing subsystem.
-//   2. Re-export core oodns execution engine.
-//   3. Re-export render formatting subsystem.
-//   4. Re-export Model Context Protocol (MCP) IPC subsystem.
+//   1. Execute DNS module anchor tests for types, allowlists, and query resolution.
+//   2. Execute render module anchor tests for table, short, JSON, and synthetic showcases.
+//   3. Execute IPC module anchor tests for CLI options and streaming MCP protocol.
+//   4. Return aggregate boolean pass/fail status.
 
-import "main.oo";
+import "dns/anchor.oo";
+import "render/anchor.oo";
+import "ipc/anchor.oo";
+
+pub fn run_all_tests() -> Bool {
+    if !run_dns_tests() {
+        return false;
+    }
+    if !run_render_tests() {
+        return false;
+    }
+    if !run_ipc_tests() {
+        return false;
+    }
+    return true;
+}

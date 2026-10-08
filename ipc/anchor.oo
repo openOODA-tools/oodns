@@ -1,0 +1,48 @@
+// # DNS IPC Subsystem Verification Anchor
+//
+// Logline: Substrate verification anchor for CLI option parser and streaming MCP server.
+//
+// Setup: Executes deterministic unit test assertions against ipc/ modules.
+//
+// Beats:
+//   1. Verify JSON token scanning and extraction primitives.
+//   2. Verify CLI options parser flag and operand recognition.
+//   3. Verify MCP JSON-RPC 2.0 handshake, tool catalogue, and dispatch.
+
+import "dns/dns_types.oo";
+import "ipc/json_field.oo";
+import "ipc/cli_options.oo";
+import "ipc/mcp_server.oo";
+
+pub fn run_ipc_tests() -> Bool {
+    // Test 1: JSON field extraction
+    let sample_json: String = "{\"domain\":\"openooda.org\",\"port\":53,\"enabled\":true}";
+    if json_extract_str_field(sample_json, "domain") != "openooda.org" { return false; }
+    if json_extract_int_field(sample_json, "port", 0) != 53 { return false; }
+    if !json_extract_bool_field(sample_json, "enabled", false) { return false; }
+
+    // Test 2: CLI option parsing
+    let mut args: List[String] = list_new();
+    args = list_push(args, "openooda.org");
+    args = list_push(args, "A");
+    args = list_push(args, "+short");
+    let opts: DnsOpts = parse_cli_options(args);
+    if opts.domain != "openooda.org" { return false; }
+    if opts.qtype != "A" { return false; }
+    if !opts.show_short { return false; }
+
+    // Test 3: MCP protocol handling
+    let init_req: String = "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\"}";
+    let init_resp: String = handle_mcp_message(init_req);
+    if chars_len(init_resp) == 0 { return false; }
+
+    let list_req: String = "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/list\"}";
+    let list_resp: String = handle_mcp_message(list_req);
+    if chars_len(list_resp) == 0 { return false; }
+
+    let call_req: String = "{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"tools/call\",\"params\":{\"name\":\"dns_lookup\",\"arguments\":{\"domain\":\"openooda.org\"}}}";
+    let call_resp: String = handle_mcp_message(call_req);
+    if chars_len(call_resp) == 0 { return false; }
+
+    return true;
+}

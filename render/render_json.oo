@@ -1,0 +1,66 @@
+// # DNS JSON Lines Serializer
+//
+// Logline: Serializes DNS resolution answers, header flags, and latency into JSON Lines.
+//
+// Setup: Pure string serializer with character-safe escaping for machine consumers.
+//
+// Beats:
+//   1. Implement character escaping for JSON strings.
+//   2. Serialize DnsRecord list into structured JSON array.
+//   3. Emit single-line JSON Lines formatted response.
+
+import "dns/dns_types.oo";
+
+pub fn json_escape(s: String) -> String {
+    let s_len: Int = chars_len(s);
+    let mut out: String = "";
+    let mut i: Int = 0;
+    while i < s_len {
+        let ch: String = str_slice(s, i, i + 1);
+        if ch == "\\" {
+            out = out + "\\\\";
+        } else if ch == "\"" {
+            out = out + "\\\"";
+        } else if ch == "\n" {
+            out = out + "\\n";
+        } else if ch == "\r" {
+            out = out + "\\r";
+        } else if ch == "\t" {
+            out = out + "\\t";
+        } else {
+            out = out + ch;
+        }
+        i = i + 1;
+    }
+    return out;
+}
+
+pub fn render_response_json(resp: DnsResponse) -> String {
+    let mut out: String = "{";
+    out = out + "\"domain\":\"" + json_escape(resp.domain) + "\",";
+    out = out + "\"qtype\":\"" + json_escape(resp.qtype) + "\",";
+    out = out + "\"rcode\":\"" + json_escape(resp.rcode) + "\",";
+    out = out + "\"server\":\"" + json_escape(resp.server) + "\",";
+    out = out + "\"latency_ms\":" + resp.latency_ms.to_string() + ",";
+    out = out + "\"authoritative\":" + (if resp.is_authoritative { "true" } else { "false" }) + ",";
+    out = out + "\"recursion_desired\":" + (if resp.recursion_desired { "true" } else { "false" }) + ",";
+    out = out + "\"recursion_available\":" + (if resp.recursion_available { "true" } else { "false" }) + ",";
+    out = out + "\"answers\":[";
+
+    let n: Int = list_len(resp.answers);
+    let mut i: Int = 0;
+    while i < n {
+        let rec: DnsRecord = list_get(resp.answers, i);
+        if i > 0 {
+            out = out + ",";
+        }
+        out = out + "{\"name\":\"" + json_escape(rec.name) + "\","
+            + "\"type\":\"" + json_escape(rec.rtype) + "\","
+            + "\"ttl\":" + rec.ttl.to_string() + ","
+            + "\"rdata\":\"" + json_escape(rec.rdata) + "\","
+            + "\"priority\":" + rec.priority.to_string() + "}";
+        i = i + 1;
+    }
+    out = out + "]}";
+    return out;
+}

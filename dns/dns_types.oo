@@ -1,0 +1,177 @@
+// # DNS Domain Types and Records
+//
+// Logline: Canonical data types, record structures, query descriptors, and option sets.
+//
+// Setup: Pure type declarations and canonical constructors for DNS protocol resolution.
+//
+// Beats:
+//   1. Declare DnsRecord, DnsQuery, DnsResponse, and DnsOpts structures.
+//   2. Implement default constructors with system-safe fallbacks.
+//   3. Provide record type normalization and validation routines.
+
+pub type DnsRecord = struct {
+    name: String,
+    rtype: String,
+    ttl: Int,
+    rdata: String,
+    priority: Int
+};
+
+pub type DnsQuery = struct {
+    domain: String,
+    qtype: String,
+    server: String,
+    port: Int,
+    use_tcp: Bool,
+    use_doh: Bool,
+    doh_url: String,
+    allowlist: String,
+    timeout_ms: Int
+};
+
+pub type DnsResponse = struct {
+    domain: String,
+    qtype: String,
+    rcode: String,
+    server: String,
+    latency_ms: Int,
+    is_authoritative: Bool,
+    is_truncated: Bool,
+    recursion_desired: Bool,
+    recursion_available: Bool,
+    answers: List[DnsRecord]
+};
+
+pub type DnsOpts = struct {
+    domain: String,
+    qtype: String,
+    server: String,
+    port: Int,
+    use_tcp: Bool,
+    use_doh: Bool,
+    doh_url: String,
+    allowlist: String,
+    timeout_ms: Int,
+    show_short: Bool,
+    show_json: Bool,
+    show_demo: Bool,
+    run_mcp: Bool,
+    show_version: Bool,
+    show_help: Bool
+};
+
+pub fn default_dns_query() -> DnsQuery {
+    return DnsQuery {
+        domain: "",
+        qtype: "A",
+        server: "127.0.0.53",
+        port: 53,
+        use_tcp: false,
+        use_doh: false,
+        doh_url: "",
+        allowlist: "",
+        timeout_ms: 2000
+    };
+}
+
+pub fn default_dns_opts() -> DnsOpts {
+    return DnsOpts {
+        domain: "",
+        qtype: "A",
+        server: "127.0.0.53",
+        port: 53,
+        use_tcp: false,
+        use_doh: false,
+        doh_url: "",
+        allowlist: "",
+        timeout_ms: 2000,
+        show_short: false,
+        show_json: false,
+        show_demo: false,
+        run_mcp: false,
+        show_version: false,
+        show_help: false
+    };
+}
+
+pub fn opts_to_query(opts: DnsOpts) -> DnsQuery {
+    return DnsQuery {
+        domain: opts.domain,
+        qtype: opts.qtype,
+        server: opts.server,
+        port: opts.port,
+        use_tcp: opts.use_tcp,
+        use_doh: opts.use_doh,
+        doh_url: opts.doh_url,
+        allowlist: opts.allowlist,
+        timeout_ms: opts.timeout_ms
+    };
+}
+
+pub fn normalize_rtype(raw: String) -> String {
+    let raw_len: Int = chars_len(raw);
+    let mut out: String = "";
+    let mut i: Int = 0;
+    while i < raw_len {
+        let ch: String = str_slice(raw, i, i + 1);
+        if ch == "a" { out = out + "A"; }
+        else if ch == "b" { out = out + "B"; }
+        else if ch == "c" { out = out + "C"; }
+        else if ch == "d" { out = out + "D"; }
+        else if ch == "e" { out = out + "E"; }
+        else if ch == "f" { out = out + "F"; }
+        else if ch == "g" { out = out + "G"; }
+        else if ch == "h" { out = out + "H"; }
+        else if ch == "i" { out = out + "I"; }
+        else if ch == "j" { out = out + "J"; }
+        else if ch == "k" { out = out + "K"; }
+        else if ch == "l" { out = out + "L"; }
+        else if ch == "m" { out = out + "M"; }
+        else if ch == "n" { out = out + "N"; }
+        else if ch == "o" { out = out + "O"; }
+        else if ch == "p" { out = out + "P"; }
+        else if ch == "q" { out = out + "Q"; }
+        else if ch == "r" { out = out + "R"; }
+        else if ch == "s" { out = out + "S"; }
+        else if ch == "t" { out = out + "T"; }
+        else if ch == "u" { out = out + "U"; }
+        else if ch == "v" { out = out + "V"; }
+        else if ch == "w" { out = out + "W"; }
+        else if ch == "x" { out = out + "X"; }
+        else if ch == "y" { out = out + "Y"; }
+        else if ch == "z" { out = out + "Z"; }
+        else { out = out + ch; }
+        i = i + 1;
+    }
+    return out;
+}
+
+pub fn is_valid_rtype(rtype: String) -> Bool {
+    let norm: String = normalize_rtype(rtype);
+    return norm == "A"
+        || norm == "AAAA"
+        || norm == "CNAME"
+        || norm == "MX"
+        || norm == "TXT"
+        || norm == "NS"
+        || norm == "SOA"
+        || norm == "PTR"
+        || norm == "SRV"
+        || norm == "CAA"
+        || norm == "HTTPS";
+}
+
+pub fn rcode_name(code: Int) -> String {
+    if code == 0 { return "NOERROR"; }
+    if code == 1 { return "FORMERR"; }
+    if code == 2 { return "SERVFAIL"; }
+    if code == 3 { return "NXDOMAIN"; }
+    if code == 4 { return "NOTIMP"; }
+    if code == 5 { return "REFUSED"; }
+    if code == 6 { return "YXDOMAIN"; }
+    if code == 7 { return "YXRRSET"; }
+    if code == 8 { return "NXRRSET"; }
+    if code == 9 { return "NOTAUTH"; }
+    if code == 10 { return "NOTZONE"; }
+    return "UNKNOWN";
+}

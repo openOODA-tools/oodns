@@ -1,32 +1,58 @@
 // # oodns Main Entry Point
 //
-// Logline: Asynchronous DNS resolver supporting DNS-over-HTTPS and capability allowlists.
+// Logline: Sovereign DNS resolver and query engine supporting DoH and capability allowlists.
 //
-// Setup: Demands explicit capability tokens and standard argument list.
+// Setup: Demands explicit capability tokens &FsReadCap, &ProcessCap, and &EnvCap under zero ambient authority.
 //
 // Beats:
-//   1. Parse command-line options and dispatch --help, --version, or --mcp.
-//   2. Execute capability-bounded oodns operations.
-//   3. Format and output structured results to standard output.
+//   1. Parse command-line options and dispatch --help, --version, --test, or --mcp.
+//   2. Route synthetic showcase requests for --demo or unadorned execution.
+//   3. Execute capability-bounded DNS resolution query against upstream nameservers.
+//   4. Format and output results as ANSI table, short values, or structured JSON Lines.
+
+import "dns/dns_types.oo";
+import "dns/dns_resolver.oo";
+import "render/render_table.oo";
+import "render/render_json.oo";
+import "render/synthetic_records.oo";
+import "ipc/cli_options.oo";
+import "ipc/mcp_server.oo";
+import "anchor.oo";
 
 fn render_help() -> String {
-    return "oodns 0.1.0 (openOODA sovereign network & egress)\n"
-        + "usage: oodns [options] [ARGUMENTS]...\n\n"
-        + "Asynchronous DNS resolver supporting DNS-over-HTTPS and capability allowlists.\n\n"
+    return "oodns 0.2.0 (openOODA sovereign network & DNS)\n"
+        + "usage: oodns [options] <domain> [TYPE]\n\n"
+        + "Sovereign DNS resolver supporting DNS-over-HTTPS and capability allowlists.\n\n"
         + "Options:\n"
+        + "  <domain>             domain name to resolve (e.g. openooda.org)\n"
+        + "  [TYPE]               record type: A, AAAA, MX, TXT, CNAME, NS, PTR, SOA, SRV [default: A]\n"
+        + "  @<server>            nameserver to query (e.g. @1.1.1.1, @8.8.8.8, @127.0.0.53)\n"
+        + "  -s, --server <ip>    override target nameserver IP address\n"
+        + "  -p, --port <port>    override query destination port [default: 53]\n"
+        + "  -t, --type <type>    explicit record type selector\n"
+        + "  -x, --reverse <ip>   reverse DNS lookup for IPv4 or IPv6 address\n"
+        + "      --doh [url]      query via RFC 8484 DNS-over-HTTPS endpoint\n"
+        + "      --allowlist <csv> restrict resolution targets to allowed domain patterns\n"
+        + "      +short           terse answer output mode (rdata values only)\n"
+        + "      +tcp             force transmission over TCP\n"
+        + "  -j, --json           output formatted as structured JSON Lines\n"
+        + "  -D, --demo           synthetic DNS resolution showcase across record types\n"
+        + "      --mcp            run as Model Context Protocol stdio server\n"
+        + "      --test           run internal verification anchor suite\n"
         + "  -h, --help           display this help and exit\n"
-        + "  -v, --version        output version information and exit\n"
-        + "      --json           output formatted as JSON Lines\n"
-        + "      --color <WHEN>   colorize output: auto, always, never [default: auto]\n"
-        + "      --theme <NAME>   override active oote palette\n"
-        + "      --mcp            run as Model Context Protocol stdio server\n";
+        + "  -v, --version        output version information and exit\n";
 }
 
 fn render_version() -> String {
-    return "oodns 0.1.0 (openOODA sovereign network & egress)\n";
+    return "oodns 0.2.0 (openOODA sovereign network & DNS)\n";
 }
 
-fn main(args: List[String]) -> Int {
+pub fn main(
+    fr: &FsReadCap,
+    pr: &ProcessCap,
+    env: &EnvCap,
+    args: List[String]
+) -> Int {
     let num_args: Int = list_len(args);
     let mut i: Int = 0;
 
@@ -40,13 +66,47 @@ fn main(args: List[String]) -> Int {
             print(render_version());
             return 0;
         }
+        if arg == "--test" {
+            if run_all_tests() {
+                println("oodns: internal anchor tests PASSED");
+                return 0;
+            } else {
+                println("oodns: internal anchor tests FAILED");
+                return 1;
+            }
+        }
         if arg == "--mcp" {
-            print("{\"jsonrpc\":\"2.0\",\"result\":{\"status\":\"ready\",\"tool\":\"oodns\"}}\n");
+            run_mcp_server(fr);
             return 0;
         }
         i = i + 1;
     }
 
-    print("oodns: sovereign capability-bounded utility ready\n");
+    let opts: DnsOpts = parse_cli_options(args);
+
+    if opts.show_demo {
+        print(run_synthetic_showcase(opts.show_json));
+        return 0;
+    }
+
+    if chars_len(opts.domain) == 0 {
+        print(run_synthetic_showcase(opts.show_json));
+        return 0;
+    }
+
+    let q: DnsQuery = opts_to_query(opts);
+    let resp: DnsResponse = resolve_query(q);
+
+    if opts.show_json {
+        print(render_response_json(resp) + "\n");
+        return 0;
+    }
+
+    if opts.show_short {
+        print(render_short_output(resp));
+        return 0;
+    }
+
+    print(render_table_output(resp));
     return 0;
 }

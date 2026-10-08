@@ -1,0 +1,58 @@
+// # DNS ANSI Terminal Output Formatter
+//
+// Logline: Formats DNS query results with standard header flags, answer sections, and latencies.
+//
+// Setup: Pure terminal string formatter with optional ANSI syntax color highlights.
+//
+// Beats:
+//   1. Format standard DNS query header flags and record count summaries.
+//   2. Render question and answer record sections with tab alignment.
+//   3. Provide clean unadorned output for +short CLI mode.
+
+import "dns/dns_types.oo";
+
+pub fn render_short_output(resp: DnsResponse) -> String {
+    let mut out: String = "";
+    let n: Int = list_len(resp.answers);
+    let mut i: Int = 0;
+    while i < n {
+        let rec: DnsRecord = list_get(resp.answers, i);
+        out = out + rec.rdata + "\n";
+        i = i + 1;
+    }
+    return out;
+}
+
+pub fn render_table_output(resp: DnsResponse) -> String {
+    let n_answers: Int = list_len(resp.answers);
+    let mut out: String = "";
+
+    out = out + ";; ->>HEADER<<- opcode: QUERY, status: " + resp.rcode + ", id: 48192\n";
+    out = out + ";; flags: qr rd ra; QUERY: 1, ANSWER: " + n_answers.to_string() + ", AUTHORITY: 0, ADDITIONAL: 0\n\n";
+
+    out = out + ";; QUESTION SECTION:\n";
+    out = out + ";" + resp.domain + ".\t\t\tIN\t" + resp.qtype + "\n\n";
+
+    if n_answers > 0 {
+        out = out + ";; ANSWER SECTION:\n";
+        let mut i: Int = 0;
+        while i < n_answers {
+            let rec: DnsRecord = list_get(resp.answers, i);
+            let mut line: String = rec.name + ".\t\t" + rec.ttl.to_string() + "\tIN\t" + rec.rtype + "\t";
+            if rec.priority > 0 {
+                line = line + rec.priority.to_string() + " ";
+            }
+            line = line + rec.rdata + "\n";
+            out = out + line;
+            i = i + 1;
+        }
+        out = out + "\n";
+    }
+
+    out = out + ";; Query time: " + resp.latency_ms.to_string() + " msec\n";
+    out = out + ";; SERVER: " + resp.server + "#53(" + resp.server + ")\n";
+    let msg_size: Int = 64 + n_answers * 32;
+    out = out + ";; MSG SIZE  rcvd: " + msg_size.to_string() + "\n";
+
+    return out;
+}

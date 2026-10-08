@@ -1,0 +1,67 @@
+// # DNS Synthetic Showcase Generator
+//
+// Logline: Multi-record DNS resolution demonstration sequence across record types and DoH.
+//
+// Setup: Generates rich synthetic resolution sets for sandboxed showcase and tests.
+//
+// Beats:
+//   1. Build sample DNS queries spanning A, AAAA, MX, TXT, CNAME, and PTR.
+//   2. Resolve each query through the resolver pipeline.
+//   3. Render styled table or JSON Lines representation of each response.
+
+import "dns/dns_types.oo";
+import "dns/dns_resolver.oo";
+import "render/render_table.oo";
+import "render/render_json.oo";
+
+pub fn run_synthetic_showcase(as_json: Bool) -> String {
+    let mut out: String = "";
+    if !as_json {
+        out = out + "=== openOODA Sovereign DNS Resolution Showcase ===\n\n";
+    }
+
+    let mut domains: List[String] = list_new();
+    let mut types: List[String] = list_new();
+
+    domains = list_push(domains, "openooda.org");
+    types = list_push(types, "A");
+
+    domains = list_push(domains, "openooda.org");
+    types = list_push(types, "AAAA");
+
+    domains = list_push(domains, "openooda.org");
+    types = list_push(types, "MX");
+
+    domains = list_push(domains, "openooda.org");
+    types = list_push(types, "TXT");
+
+    domains = list_push(domains, "tools.openooda.org");
+    types = list_push(types, "CNAME");
+
+    domains = list_push(domains, "1.1.1.1");
+    types = list_push(types, "PTR");
+
+    let n: Int = list_len(domains);
+    let mut i: Int = 0;
+    while i < n {
+        let dom: String = list_get(domains, i);
+        let qtype: String = list_get(types, i);
+
+        let mut q: DnsQuery = default_dns_query();
+        q.domain = dom;
+        q.qtype = qtype;
+        if i == 5 {
+            q.domain = "1.1.1.1.in-addr.arpa";
+        }
+
+        let resp: DnsResponse = resolve_query(q);
+        if as_json {
+            out = out + render_response_json(resp) + "\n";
+        } else {
+            out = out + render_table_output(resp) + "\n";
+        }
+        i = i + 1;
+    }
+
+    return out;
+}

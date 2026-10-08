@@ -1,0 +1,60 @@
+// # DNS-over-HTTPS (DoH) Protocol Wire Engine
+//
+// Logline: Formats, targets, and maps RFC 8484 DNS-over-HTTPS resolution endpoints.
+//
+// Setup: Pure query builder and URL serializer with capability boundedness.
+//
+// Beats:
+//   1. Define default DoH endpoint targets (Cloudflare, Google, Quad9).
+//   2. Validate and normalize DoH HTTPS endpoints.
+//   3. Build compliant RFC 8484 query URLs with query parameters.
+
+pub fn default_doh_endpoint() -> String {
+    return "https://cloudflare-dns.com/dns-query";
+}
+
+pub fn google_doh_endpoint() -> String {
+    return "https://dns.google/resolve";
+}
+
+pub fn quad9_doh_endpoint() -> String {
+    return "https://dns.quad9.net/dns-query";
+}
+
+pub fn is_doh_endpoint(url: String) -> Bool {
+    let u_len: Int = chars_len(url);
+    if u_len < 8 {
+        return false;
+    }
+    return str_slice(url, 0, 8) == "https://";
+}
+
+pub fn normalize_doh_endpoint(raw: String) -> String {
+    if chars_len(raw) == 0 || raw == "cloudflare" || raw == "cf" {
+        return default_doh_endpoint();
+    }
+    if raw == "google" {
+        return google_doh_endpoint();
+    }
+    if raw == "quad9" {
+        return quad9_doh_endpoint();
+    }
+    if is_doh_endpoint(raw) {
+        return raw;
+    }
+    return "https://" + raw;
+}
+
+pub fn build_doh_url(endpoint: String, domain: String, qtype: String) -> String {
+    let base: String = normalize_doh_endpoint(endpoint);
+    let mut sep: String = "?";
+    let b_len: Int = chars_len(base);
+    let mut i: Int = 0;
+    while i < b_len {
+        if str_slice(base, i, i + 1) == "?" {
+            sep = "&";
+        }
+        i = i + 1;
+    }
+    return base + sep + "name=" + domain + "&type=" + qtype;
+}
